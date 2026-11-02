@@ -54,93 +54,128 @@ const SUPABASE_URL = "https://wqcpbeizujufmnzonjxh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_FrGYTKcu5HfqE-rBMHSurg_-JyrFH-K";
 const FUNCTION_URL = SUPABASE_URL + "/functions/v1/publish-news";
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
-const status = message => $("status").textContent = message;
-
-async function refreshSession(){
-  const {data:{session}} = await supabase.auth.getSession();
-  $("login").classList.toggle("hidden", !!session);
-  $("editor").classList.toggle("hidden", !session);
-}
-
-$("loginBtn").onclick = async () => {
-  status("Входим...");
-  const {error} = await supabase.auth.signInWithPassword({
-    email:$("email").value.trim(),
-    password:$("password").value
-  });
-  if(error){status("Ошибка входа: "+error.message);return;}
-  status("Вход выполнен.");
-  await refreshSession();
+const status = message => {
+  $("status").textContent = message;
 };
 
-$("logoutBtn").onclick = async () => {
-  await supabase.auth.signOut();
-  status("Ты вышел из панели.");
-  await refreshSession();
-};
-
-$("publishBtn").onclick = async () => {
-  const title = $("title").value.trim();
-  const excerpt = $("excerpt").value.trim();
-  const body = $("body").value.trim();
-  const file = $("cover").files[0];
-
-  if(!title || !excerpt || !body){
-    status("Заполни заголовок, описание и текст новости.");
-    return;
-  }
-  if(file && file.size > 5*1024*1024){
-    status("Файл больше 5 МБ.");
-    return;
-  }
-
-  const {data:{session}} = await supabase.auth.getSession();
-  if(!session){status("Сначала войди.");await refreshSession();return;}
-
-  const button = $("publishBtn");
-  button.disabled = true;
-  status("Публикуем новость...");
-
-  try{
-    let cover = null;
-    if(file){
-      const base64 = await new Promise((resolve,reject)=>{
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      cover = {name:file.name,base64};
+async function init() {
+  try {
+    if (!window.supabase) {
+      throw new Error("Библиотека Supabase не загрузилась. Проверь интернет или CDN.");
     }
 
-    const response = await fetch(FUNCTION_URL,{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "apikey":SUPABASE_KEY,
-        "Authorization":"Bearer "+session.access_token
-      },
-      body:JSON.stringify({title,excerpt,body,cover})
+    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function refreshSession() {
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+
+      const session = data.session;
+      $("login").classList.toggle("hidden", !!session);
+      $("editor").classList.toggle("hidden", !session);
+    }
+
+    $("loginBtn").addEventListener("click", async () => {
+      try {
+        status("Проверяем данные...");
+        const { error } = await client.auth.signInWithPassword({
+          email: $("email").value.trim(),
+          password: $("password").value
+        });
+
+        if (error) throw error;
+
+        await refreshSession();
+        status("Вход выполнен!");
+      } catch (e) {
+        status("Ошибка входа: " + e.message);
+      }
     });
 
-    const result = await response.json();
-    if(!response.ok) throw new Error(result.error || JSON.stringify(result));
+    $("logoutBtn").addEventListener("click", async () => {
+      const { error } = await client.auth.signOut();
+      if (error) {
+        status(error.message);
+        return;
+      }
+      await refreshSession();
+      status("Ты вышел из панели.");
+    });
 
-    status("Новость опубликована! Она сохранена в GitHub.");
-    $("title").value="";
-    $("excerpt").value="";
-    $("body").value="";
-    $("cover").value="";
-  }catch(error){
-    status("Ошибка: "+error.message);
-  }finally{
-    button.disabled = false;
+    $("publishBtn").addEventListener("click", async () => {
+      try {
+        const title = $("title").value.trim();
+        const excerpt = $("excerpt").value.trim();
+        const body = $("body").value.trim();
+        const file = $("cover").files[0];
+
+        if (!title || !excerpt || !body) {
+          status("Заполни заголовок, описание и текст.");
+          return;
+        }
+
+        if (file && file.size > 5 * 1024 * 1024) {
+          status("Файл должен быть меньше 5 МБ.");
+          return;
+        }
+
+        const { data } = await client.auth.getSession();
+        if (!data.session) {
+          status("Сначала войди в аккаунт.");
+          await refreshSession();
+          return;
+        }
+
+        $("publishBtn").disabled = true;
+        status("Публикуем новость...");
+
+        let cover = null;
+        if (file) {
+          const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+          cover = { name: file.name, base64 };
+        }
+
+        const response = await fetch(FUNCTION_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": SUPABASE_KEY,
+            "Authorization": "Bearer " + data.session.access_token
+          },
+          body: JSON.stringify({ title, excerpt, body, cover })
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || JSON.stringify(result));
+        }
+
+        status("Новость опубликована и сохранена в GitHub!");
+        $("title").value = "";
+        $("excerpt").value = "";
+        $("body").value = "";
+        $("cover").value = "";
+      } catch (e) {
+        status("Ошибка публикации: " + e.message);
+      } finally {
+        $("publishBtn").disabled = false;
+      }
+    });
+
+    await refreshSession();
+    status("Панель загружена. Можно входить.");
+  } catch (e) {
+    status("Ошибка запуска панели: " + e.message);
   }
-};
+}
 
-refreshSession();
+init();
 </script>
 </body>
 </html>
