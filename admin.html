@@ -33,15 +33,13 @@ small{color:#9eacc0}
 <body>
 <main>
 <h1>FRAGLINE / ADMIN</h1>
-<p>Управление новостями и рейтингом команд</p>
-
+<p>Управление новостями, рейтингом и профилями команд</p>
 <section id="login" class="panel">
 <h2>Вход администратора</h2>
 <input id="email" type="email" placeholder="Электронная почта" autocomplete="username">
 <input id="password" type="password" placeholder="Пароль" autocomplete="current-password">
 <button id="loginBtn">Войти</button>
 </section>
-
 <section id="app" class="hidden">
 <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
 <p>Ты вошёл в панель управления.</p><button id="logoutBtn" class="secondary" type="button">Выйти</button>
@@ -49,8 +47,8 @@ small{color:#9eacc0}
 <div class="tabs">
 <button class="tab active" data-tab="news">Новости</button>
 <button class="tab" data-tab="rating">Рейтинг команд</button>
+<button class="tab" data-tab="profiles">Профили и матчи</button>
 </div>
-
 <section id="newsTab">
 <div class="panel">
 <h2>Новая новость</h2>
@@ -61,7 +59,6 @@ small{color:#9eacc0}
 <button id="publishBtn">Опубликовать новость</button>
 </div>
 </section>
-
 <section id="ratingTab" class="hidden">
 <div class="panel">
 <h2>Добавить команду</h2>
@@ -92,10 +89,30 @@ small{color:#9eacc0}
 <div class="table-wrap"><table><thead><tr><th>Дата</th><th>Команда</th><th>Изменение</th><th>Рейтинг</th><th>Причина</th><th>Тип</th></tr></thead><tbody id="historyBody"><tr><td colspan="6">Загрузка...</td></tr></tbody></table></div>
 </div>
 </section>
+<section id="profilesTab" class="hidden">
+<div class="panel">
+<h2>Настройка профиля команды</h2>
+<label>Выбери команду</label><select id="profileTeamSelect"><option value="">Сначала добавь команду</option></select>
+<label>Ссылка на логотип (URL картинки)</label><input id="teamLogoInput" placeholder="https://example.com/logo.png">
+<label>Описание команды</label><textarea id="teamDescInput" placeholder="Информация о команде, достижения..."></textarea>
+<label>Состав (игроки через запятую)</label><input id="teamRosterInput" placeholder="s1mple, b1t, electronic, Perfecto">
+<button id="saveProfileBtn">Сохранить профиль</button>
+</div>
+<div class="panel">
+<h2>Добавить матч в историю команды</h2>
+<label>Команда</label><select id="matchTeamSelect"><option value="">Выбери команду</option></select>
+<div class="grid">
+<div><label>Соперник</label><input id="oppNameInput" placeholder="Например, NAVI"></div>
+<div><label>Карта</label><input id="mapNameInput" placeholder="Mirage / Ancient"></div>
+<div><label>Счет команды</label><input id="teamScoreInput" type="number" min="0" value="13"></div>
+<div><label>Счет соперника</label><input id="oppScoreInput" type="number" min="0" value="9"></div>
+</div>
+<button id="addMatchBtn" style="margin-top:12px">Добавить матч в историю</button>
+</div>
+</section>
 </section>
 <div id="status"></div>
 </main>
-
 <script>
 const SUPABASE_URL = "https://wqcpbeizujufmnzonjxh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_FrGYTKcu5HfqE-rBMHSurg_-JyrFH-K";
@@ -133,6 +150,7 @@ document.querySelectorAll(".tab").forEach(btn=>btn.addEventListener("click",()=>
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===btn));
   $("newsTab").classList.toggle("hidden",btn.dataset.tab!=="news");
   $("ratingTab").classList.toggle("hidden",btn.dataset.tab!=="rating");
+  $("profilesTab").classList.toggle("hidden",btn.dataset.tab!=="profiles");
 }));
 $("loginBtn").addEventListener("click",async()=>{
   try{status("Проверяем данные...");
@@ -162,16 +180,88 @@ async function loadRating(){
   $("historyBody").innerHTML='<tr><td colspan="6">Загрузка...</td></tr>';
   try{
     const [{data:teams,error:te},{data:history,error:he}]=await Promise.all([
-      client.from("teams").select("id,name,rating,wins,losses,draws").order("rating",{ascending:false}),
+      client.from("teams").select("id,name,rating,wins,losses,draws,logo,description,roster").order("rating",{ascending:false}),
       client.from("rating_history").select("id,team_id,old_rating,new_rating,change,reason,source,created_at,teams(name)").order("created_at",{ascending:false}).limit(50)
     ]);
     if(te)throw te;if(he)throw he;
-    $("teamsBody").innerHTML=teams.length?teams.map(t=>`<tr><td>${escapeHtml(t.name)}</td><td><b>${t.rating}</b></td><td>${t.wins}</td><td>${t.losses}</td><td>${t.draws}</td></tr>`).join(""):'<tr><td colspan="5">Команд пока нет.</td></tr>';
-    $("adjustTeam").innerHTML='<option value="">Выбери команду</option>'+teams.map(t=>`<option value="${t.id}">${escapeHtml(t.name)} — ${t.rating}</option>`).join("");
+    
+    $("teamsBody").innerHTML=teams.length?teams.map(t=>`<tr><td><a href="team.html?id=${t.id}" target="_blank" style="color:#65e6a1;text-decoration:none">${escapeHtml(t.name)} ↗</a></td><td><b>${t.rating}</b></td><td>${t.wins||0}</td><td>${t.losses||0}</td><td>${t.draws||0}</td></tr>`).join(""):'<tr><td colspan="5">Команд пока нет.</td></tr>';
+    
+    const teamOpts = '<option value="">Выбери команду</option>'+teams.map(t=>`<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("");
+    $("adjustTeam").innerHTML= '<option value="">Выбери команду</option>'+teams.map(t=>`<option value="${t.id}">${escapeHtml(t.name)} — ${t.rating}</option>`).join("");
+    $("profileTeamSelect").innerHTML = teamOpts;
+    $("matchTeamSelect").innerHTML = teamOpts;
+
     $("historyBody").innerHTML=history.length?history.map(h=>`<tr><td>${new Date(h.created_at).toLocaleString("ru-RU")}</td><td>${escapeHtml(h.teams?.name||"Команда")}</td><td class="${h.change>=0?"positive":"negative"}">${h.change>0?"+":""}${h.change}</td><td>${h.old_rating} → ${h.new_rating}</td><td>${escapeHtml(h.reason)}</td><td>${h.source==="admin"?"Админ":"Матч"}</td></tr>`).join(""):'<tr><td colspan="6">История пока пуста.</td></tr>';
   }catch(e){$("teamsBody").innerHTML='<tr><td colspan="5">Не удалось загрузить: '+escapeHtml(e.message)+'</td></tr>';$("historyBody").innerHTML='<tr><td colspan="6">Проверь подключение и права чтения.</td></tr>';}
 }
 function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+$("profileTeamSelect").addEventListener("change", async (e)=>{
+  const id = e.target.value;
+  if(!id){
+    $("teamLogoInput").value = ""; $("teamDescInput").value = ""; $("teamRosterInput").value = "";
+    return;
+  }
+  const {data} = await client.from("teams").select("logo,description,roster").eq("id", id).single();
+  if(data){
+    $("teamLogoInput").value = data.logo || "";
+    $("teamDescInput").value = data.description || "";
+    $("teamRosterInput").value = Array.isArray(data.roster) ? data.roster.join(", ") : "";
+  }
+});
+
+$("saveProfileBtn").addEventListener("click", async ()=>{
+  try {
+    const id = $("profileTeamSelect").value;
+    if(!id) throw new Error("Выбери команду.");
+    const logo = $("teamLogoInput").value.trim();
+    const description = $("teamDescInput").value.trim();
+    const rosterStr = $("teamRosterInput").value.trim();
+    const roster = rosterStr ? rosterStr.split(",").map(s => s.trim()).filter(Boolean) : [];
+
+    $("saveProfileBtn").disabled = true;
+    const {error} = await client.from("teams").update({logo, description, roster}).eq("id", id);
+    if(error) throw error;
+    status("Профиль команды успешно сохранен!");
+    await loadRating();
+  } catch(e){
+    status("Ошибка сохранения профиля: " + e.message);
+  } finally {
+    $("saveProfileBtn").disabled = false;
+  }
+});
+
+$("addMatchBtn").addEventListener("click", async ()=>{
+  try {
+    const team_id = $("matchTeamSelect").value;
+    const opponent_name = $("oppNameInput").value.trim();
+    const map_name = $("mapNameInput").value.trim();
+    const team_score = Number($("teamScoreInput").value);
+    const opponent_score = Number($("oppScoreInput").value);
+
+    if(!team_id || !opponent_name) throw new Error("Выбери команду и укажи соперника.");
+    
+    let result = "draw";
+    if(team_score > opponent_score) result = "win";
+    else if(team_score < opponent_score) result = "loss";
+
+    $("addMatchBtn").disabled = true;
+    const {error} = await client.from("team_matches").insert([{
+      team_id, opponent_name, team_score, opponent_score, result, map_name
+    }]);
+    if(error) throw error;
+
+    $("oppNameInput").value = "";
+    $("mapNameInput").value = "";
+    status("Матч успешно добавлен в историю команды!");
+  } catch(e){
+    status("Ошибка добавления матча: " + e.message);
+  } finally {
+    $("addMatchBtn").disabled = false;
+  }
+});
+
 $("createTeamBtn").addEventListener("click",async()=>{
   try{const name=$("teamName").value.trim();if(!name)throw new Error("Введи название команды.");
     $("createTeamBtn").disabled=true;await ratingAction("create_team",{name});$("teamName").value="";
@@ -192,6 +282,5 @@ $("adjustBtn").addEventListener("click",async()=>{
 $("reloadRatingBtn").addEventListener("click",async()=>{await loadRating();status("Данные рейтинга обновлены.");});
 init();
 async function init(){try{await refreshSession();status("Панель загружена.");}catch(e){status("Ошибка запуска панели: "+e.message);}}
-</script>
 </body>
 </html>
