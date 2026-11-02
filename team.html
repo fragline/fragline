@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -42,10 +41,25 @@ th{color:var(--muted)}
 </div>
 
 <script>
+const MAP_NAMES = {
+  "de_mirage": "Mirage",
+  "de_dust2": "Dust II",
+  "de_nuke": "Nuke",
+  "de_inferno": "Inferno",
+  "de_cache": "Cache",
+  "de_ancient": "Ancient",
+  "de_anubis": "Anubis"
+};
+
+function formatMapName(rawMap){
+  if(!rawMap) return '—';
+  const mapKey = String(rawMap).toLowerCase().trim();
+  return MAP_NAMES[mapKey] || rawMap.replace(/^de_/, '').toUpperCase();
+}
+
 const SB_URL = "https://wqcpbeizujufmnzonjxh.supabase.co";
 const SB_KEY = "sb_publishable_FrGYTKcu5HfqE-rBMHSurg_-JyrFH-K";
 const client = window.supabase.createClient(SB_URL, SB_KEY);
-
 
 async function loadTeamProfile(){
   const params = new URLSearchParams(location.search);
@@ -57,16 +71,13 @@ async function loadTeamProfile(){
     return;
   }
 
-
   try {
     const [{data: team, error: teamErr}, {data: matches, error: matchErr}] = await Promise.all([
       client.from("teams").select("*").eq("id", teamId).single(),
       client.from("team_matches").select("*").eq("team_id", teamId).order("match_date", {ascending: false})
     ]);
 
-
     if(teamErr || !team) throw new Error("Команда не найдена.");
-
 
     const totalMatches = (team.wins || 0) + (team.losses || 0);
     const winrate = totalMatches > 0 ? ((team.wins / totalMatches) * 100).toFixed(1) : "0.0";
@@ -77,7 +88,6 @@ async function loadTeamProfile(){
       rosterHtml = `<div class="roster-grid">` + team.roster.map(p => `<div class="player-card">🛡️ ${escapeHtml(p)}</div>`).join("") + `</div>`;
     }
 
-
     let matchesHtml = '<div class="empty">История матчей пока пуста.</div>';
     if(Array.isArray(matches) && matches.length > 0){
       matchesHtml = `<table><thead><tr><th>Дата</th><th>Соперник</th><th>Счет</th><th>Карта</th><th>Результат</th></tr></thead><tbody>` +
@@ -86,12 +96,11 @@ async function loadTeamProfile(){
             <td>${new Date(m.match_date).toLocaleDateString("ru-RU")}</td>
             <td><b>${escapeHtml(m.opponent_name)}</b></td>
             <td>${m.team_score} : ${m.opponent_score}</td>
-            <td>${escapeHtml(m.map_name || '—')}</td>
+            <td>${escapeHtml(formatMapName(m.map_name))}</td>
             <td class="${m.result}">${m.result === 'win' ? 'ПОБЕДА' : m.result === 'loss' ? 'ПОРАЖЕНИЕ' : 'НИЧЬЯ'}</td>
           </tr>
         `).join("") + `</tbody></table>`;
     }
-
 
     container.innerHTML = `
       <div class="panel">
@@ -111,12 +120,10 @@ async function loadTeamProfile(){
         </div>
       </div>
 
-
       <div class="panel">
         <h2 style="margin-top:0">Состав команды</h2>
         ${rosterHtml}
       </div>
-
 
       <div class="panel">
         <h2 style="margin-top:0">История матчей</h2>
@@ -128,12 +135,9 @@ async function loadTeamProfile(){
   }
 }
 
-
 function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-
 
 loadTeamProfile();
 </script>
-
 </body>
 </html>
