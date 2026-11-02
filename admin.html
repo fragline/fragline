@@ -153,7 +153,10 @@ async function init() {
 
         const result = await response.json();
         if (!response.ok) {
-          throw new Error(result.error || JSON.stringify(result));
+          throw new Error(
+            (result.error || "Ошибка") + " | Подробности: " +
+            (result.details || JSON.stringify(result))
+          );
         }
 
         status("Новость опубликована и сохранена в GitHub!");
