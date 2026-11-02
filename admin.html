@@ -262,22 +262,37 @@ $("profileTeamSelect").addEventListener("change", async (e)=>{
 });
 
 
-$("saveProfileBtn").addEventListener("click", async ()=>{
+$("saveProfileBtn").addEventListener("click", async () => {
   try {
     const id = $("profileTeamSelect").value;
-    if(!id) throw new Error("Выбери команду.");
+    if (!id) throw new Error("Выбери команду.");
+    
     const logo = $("teamLogoInput").value.trim();
     const description = $("teamDescInput").value.trim();
     const rosterStr = $("teamRosterInput").value.trim();
-    const roster = rosterStr ? rosterStr.split(",").map(s => s.trim()).filter(Boolean) : [];
-
+    
+    // Разбиваем игроков по запятой
+    const roster = rosterStr 
+      ? rosterStr.split(",").map(s => s.trim()).filter(Boolean) 
+      : [];
 
     $("saveProfileBtn").disabled = true;
-    const {error} = await client.from("teams").update({logo, description, roster}).eq("id", id);
-    if(error) throw error;
-    status("Профиль команды успешно сохранен!");
-    await loadRating();
-  } catch(e){
+    status("Сохранение профиля...");
+
+    // Обновляем данные в Supabase
+    const { data, error } = await client
+      .from("teams")
+      .update({ logo, description, roster })
+      .eq("id", id)
+      .select();
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      throw new Error("Запись не обновилась. Проверь RLS-политику UPDATE в Supabase.");
+    }
+
+    status("Профиль команды успешно обновлен!");
+  } catch (e) {
     status("Ошибка сохранения профиля: " + e.message);
   } finally {
     $("saveProfileBtn").disabled = false;
