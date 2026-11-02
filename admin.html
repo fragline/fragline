@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -16,7 +17,7 @@ button{padding:11px 16px;border:0;border-radius:8px;background:#65e6a1;color:#07
 button.secondary{background:#26364b;color:#edf2fa}button.danger{background:#ef7777;color:#210909}
 button:disabled{opacity:.5;cursor:wait}
 .hidden{display:none!important}
-#status{margin-top:18px;white-space:pre-wrap;color:#65e6a1}
+#status{margin-top:18px;white-space:pre-wrap;color:#65e6a1;word-break:break-word}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}
 .tab{background:#26364b;color:#edf2fa}.tab.active{background:#65e6a1;color:#07130d}
 .panel{background:#0d1520;border:1px solid #283548;border-radius:12px;padding:18px;margin:14px 0}
@@ -34,12 +35,18 @@ small{color:#9eacc0}
 <main>
 <h1>FRAGLINE / ADMIN</h1>
 <p>Управление новостями, рейтингом и профилями команд</p>
+
 <section id="login" class="panel">
 <h2>Вход администратора</h2>
-<input id="email" type="email" placeholder="Электронная почта" autocomplete="username">
-<input id="password" type="password" placeholder="Пароль" autocomplete="current-password">
-<button id="loginBtn">Войти</button>
+<form id="loginForm" onsubmit="return false;">
+<label>Электронная почта</label>
+<input id="email" type="email" placeholder="email@example.com" autocomplete="username" required>
+<label>Пароль</label>
+<input id="password" type="password" placeholder="Пароль" autocomplete="current-password" required>
+<button id="loginBtn" type="submit">Войти</button>
+</form>
 </section>
+
 <section id="app" class="hidden">
 <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
 <p>Ты вошёл в панель управления.</p><button id="logoutBtn" class="secondary" type="button">Выйти</button>
@@ -49,6 +56,7 @@ small{color:#9eacc0}
 <button class="tab" data-tab="rating">Рейтинг команд</button>
 <button class="tab" data-tab="profiles">Профили и матчи</button>
 </div>
+
 <section id="newsTab">
 <div class="panel">
 <h2>Новая новость</h2>
@@ -59,6 +67,7 @@ small{color:#9eacc0}
 <button id="publishBtn">Опубликовать новость</button>
 </div>
 </section>
+
 <section id="ratingTab" class="hidden">
 <div class="panel">
 <h2>Добавить команду</h2>
@@ -89,6 +98,7 @@ small{color:#9eacc0}
 <div class="table-wrap"><table><thead><tr><th>Дата</th><th>Команда</th><th>Изменение</th><th>Рейтинг</th><th>Причина</th><th>Тип</th></tr></thead><tbody id="historyBody"><tr><td colspan="6">Загрузка...</td></tr></tbody></table></div>
 </div>
 </section>
+
 <section id="profilesTab" class="hidden">
 <div class="panel">
 <h2>Настройка профиля команды</h2>
@@ -98,6 +108,7 @@ small{color:#9eacc0}
 <label>Состав (игроки через запятую)</label><input id="teamRosterInput" placeholder="s1mple, b1t, electronic, Perfecto">
 <button id="saveProfileBtn">Сохранить профиль</button>
 </div>
+
 <div class="panel">
 <h2>Добавить матч в историю команды</h2>
 <label>Команда</label><select id="matchTeamSelect"><option value="">Выбери команду</option></select>
@@ -113,6 +124,7 @@ small{color:#9eacc0}
 </section>
 <div id="status"></div>
 </main>
+
 <script>
 const SUPABASE_URL = "https://wqcpbeizujufmnzonjxh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_FrGYTKcu5HfqE-rBMHSurg_-JyrFH-K";
@@ -122,12 +134,15 @@ const $ = id => document.getElementById(id);
 const status = message => $("status").textContent = message;
 const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+
 async function sessionOrThrow(){
   const {data,error}=await client.auth.getSession();
   if(error) throw error;
   if(!data.session) throw new Error("Сессия истекла. Войди снова.");
   return data.session;
 }
+
+
 async function ratingAction(action, payload={}){
   const session=await sessionOrThrow();
   const response=await fetch(RATING_FUNCTION_URL,{
@@ -139,29 +154,55 @@ async function ratingAction(action, payload={}){
   if(!response.ok) throw new Error(result.error||result.message||JSON.stringify(result));
   return result;
 }
+
+
 async function refreshSession(){
-  const {data,error}=await client.auth.getSession();if(error)throw error;
+  const {data,error}=await client.auth.getSession();
+  if(error) throw error;
   const signedIn=!!data.session;
   $("login").classList.toggle("hidden",signedIn);
   $("app").classList.toggle("hidden",!signedIn);
   if(signedIn) await loadRating();
 }
+
+
 document.querySelectorAll(".tab").forEach(btn=>btn.addEventListener("click",()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===btn));
   $("newsTab").classList.toggle("hidden",btn.dataset.tab!=="news");
   $("ratingTab").classList.toggle("hidden",btn.dataset.tab!=="rating");
   $("profilesTab").classList.toggle("hidden",btn.dataset.tab!=="profiles");
 }));
-$("loginBtn").addEventListener("click",async()=>{
-  try{status("Проверяем данные...");
-    const {error}=await client.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});
-    if(error)throw error;await refreshSession();status("Вход выполнен.");
-  }catch(e){status("Ошибка входа: "+e.message);}
+
+
+$("loginForm").addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  const email = $("email").value.trim();
+  const password = $("password").value;
+  if(!email || !password) return;
+  
+  try{
+    status("Проверяем данные авторизации...");
+    $("loginBtn").disabled = true;
+    const {data, error} = await client.auth.signInWithPassword({email, password});
+    if(error) throw error;
+    await refreshSession();
+    status("Вход выполнен успешно.");
+  }catch(e){
+    status("Ошибка входа: " + (e.message || "Неверный логин или пароль."));
+  }finally{
+    $("loginBtn").disabled = false;
+  }
 });
+
+
 $("logoutBtn").addEventListener("click",async()=>{
-  const {error}=await client.auth.signOut();if(error){status(error.message);return;}
-  await refreshSession();status("Ты вышел из панели.");
+  const {error}=await client.auth.signOut();
+  if(error){status(error.message);return;}
+  await refreshSession();
+  status("Ты вышел из панели.");
 });
+
+
 $("publishBtn").addEventListener("click",async()=>{
   try{
     const title=$("title").value.trim(),excerpt=$("excerpt").value.trim(),body=$("body").value.trim(),file=$("cover").files[0];
@@ -172,9 +213,11 @@ $("publishBtn").addEventListener("click",async()=>{
     const response=await fetch(NEWS_FUNCTION_URL,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":"Bearer "+session.access_token},body:JSON.stringify({title,excerpt,body,cover})});
     const result=await response.json();if(!response.ok)throw new Error(result.error||result.details||JSON.stringify(result));
     $("title").value="";$("excerpt").value="";$("body").value="";$("cover").value="";
-    status("Новость опубликована и сохранена в GitHub!");
+    status("Новость опубликована и сохранена!");
   }catch(e){status("Ошибка публикации: "+e.message);}finally{$("publishBtn").disabled=false;}
 });
+
+
 async function loadRating(){
   $("teamsBody").innerHTML='<tr><td colspan="5">Загрузка...</td></tr>';
   $("historyBody").innerHTML='<tr><td colspan="6">Загрузка...</td></tr>';
@@ -192,10 +235,17 @@ async function loadRating(){
     $("profileTeamSelect").innerHTML = teamOpts;
     $("matchTeamSelect").innerHTML = teamOpts;
 
+
     $("historyBody").innerHTML=history.length?history.map(h=>`<tr><td>${new Date(h.created_at).toLocaleString("ru-RU")}</td><td>${escapeHtml(h.teams?.name||"Команда")}</td><td class="${h.change>=0?"positive":"negative"}">${h.change>0?"+":""}${h.change}</td><td>${h.old_rating} → ${h.new_rating}</td><td>${escapeHtml(h.reason)}</td><td>${h.source==="admin"?"Админ":"Матч"}</td></tr>`).join(""):'<tr><td colspan="6">История пока пуста.</td></tr>';
-  }catch(e){$("teamsBody").innerHTML='<tr><td colspan="5">Не удалось загрузить: '+escapeHtml(e.message)+'</td></tr>';$("historyBody").innerHTML='<tr><td colspan="6">Проверь подключение и права чтения.</td></tr>';}
+  }catch(e){
+    $("teamsBody").innerHTML='<tr><td colspan="5">Не удалось загрузить: '+escapeHtml(e.message)+'</td></tr>';
+    $("historyBody").innerHTML='<tr><td colspan="6">Проверь подключение и права чтения.</td></tr>';
+  }
 }
+
+
 function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
 
 $("profileTeamSelect").addEventListener("change", async (e)=>{
   const id = e.target.value;
@@ -211,6 +261,7 @@ $("profileTeamSelect").addEventListener("change", async (e)=>{
   }
 });
 
+
 $("saveProfileBtn").addEventListener("click", async ()=>{
   try {
     const id = $("profileTeamSelect").value;
@@ -219,6 +270,7 @@ $("saveProfileBtn").addEventListener("click", async ()=>{
     const description = $("teamDescInput").value.trim();
     const rosterStr = $("teamRosterInput").value.trim();
     const roster = rosterStr ? rosterStr.split(",").map(s => s.trim()).filter(Boolean) : [];
+
 
     $("saveProfileBtn").disabled = true;
     const {error} = await client.from("teams").update({logo, description, roster}).eq("id", id);
@@ -232,6 +284,7 @@ $("saveProfileBtn").addEventListener("click", async ()=>{
   }
 });
 
+
 $("addMatchBtn").addEventListener("click", async ()=>{
   try {
     const team_id = $("matchTeamSelect").value;
@@ -240,17 +293,20 @@ $("addMatchBtn").addEventListener("click", async ()=>{
     const team_score = Number($("teamScoreInput").value);
     const opponent_score = Number($("oppScoreInput").value);
 
+
     if(!team_id || !opponent_name) throw new Error("Выбери команду и укажи соперника.");
     
     let result = "draw";
     if(team_score > opponent_score) result = "win";
     else if(team_score < opponent_score) result = "loss";
 
+
     $("addMatchBtn").disabled = true;
     const {error} = await client.from("team_matches").insert([{
       team_id, opponent_name, team_score, opponent_score, result, map_name
     }]);
     if(error) throw error;
+
 
     $("oppNameInput").value = "";
     $("mapNameInput").value = "";
@@ -262,13 +318,18 @@ $("addMatchBtn").addEventListener("click", async ()=>{
   }
 });
 
+
 $("createTeamBtn").addEventListener("click",async()=>{
   try{const name=$("teamName").value.trim();if(!name)throw new Error("Введи название команды.");
     $("createTeamBtn").disabled=true;await ratingAction("create_team",{name});$("teamName").value="";
     await loadRating();status("Команда создана с рейтингом 100.");
   }catch(e){status("Ошибка создания команды: "+e.message);}finally{$("createTeamBtn").disabled=false;}
 });
+
+
 $("adjustMode").addEventListener("change",()=>{$("amountLabel").textContent=$("adjustMode").value==="set"?"Новый рейтинг":"Количество очков";$("amount").min=$("adjustMode").value==="set"?"10":"1";});
+
+
 $("adjustBtn").addEventListener("click",async()=>{
   try{
     const team_id=$("adjustTeam").value,mode=$("adjustMode").value,amount=Number($("amount").value),reason=$("reason").value.trim();
@@ -279,8 +340,21 @@ $("adjustBtn").addEventListener("click",async()=>{
     $("amount").value="";$("reason").value="";await loadRating();status("Рейтинг успешно изменён.");
   }catch(e){status("Ошибка изменения рейтинга: "+e.message);}finally{$("adjustBtn").disabled=false;}
 });
+
+
 $("reloadRatingBtn").addEventListener("click",async()=>{await loadRating();status("Данные рейтинга обновлены.");});
+
+
 init();
-async function init(){try{await refreshSession();status("Панель загружена.");}catch(e){status("Ошибка запуска панели: "+e.message);}}
+async function init(){
+  try{
+    await refreshSession();
+    status("Панель готова к работе.");
+  }catch(e){
+    status("Ошибка запуска панели: "+e.message);
+  }
+}
+</script>
+
 </body>
 </html>
