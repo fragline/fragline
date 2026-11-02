@@ -25,23 +25,77 @@
 </div><footer class="footnote">FRAGLINE · НЕЗАВИСИМЫЙ CS2 MATCH HUB · ДАННЫЕ ПОСТУПАЮТ ИЗ ИГРОВОЙ GSI-ТРАНСЛЯЦИИ</footer></div>
 
 <script>
-const API_URL='https://fragline-api.kozulinartem018.workers.dev/stats';
-const root=document.getElementById('matchRoot'),activity=document.getElementById('activity');
-function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+const SB_URL='https://wqcpbeizujufmnzonjxh.supabase.co';
+const SB_KEY='sb_publishable_FrGYTKcu5HfqE-rBMHSurg_-JyrFH-K';
+const API_URL=SB_URL+'/rest/v1/live_match?id=eq.1&select=match_data,connected,updated';
+
+const root=document.getElementById('matchRoot');
+const activity=document.getElementById('activity');
+
+function esc(v){
+ return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 async function refresh(){
  try{
-  const r=await fetch(API_URL,{cache:'no-store'});if(!r.ok)throw Error('api');const d=await r.json();
-  const m=d.map||{},rd=d.round||{},players=Array.isArray(d.players)?d.players:[],kills=Array.isArray(d.kill_feed)?d.kill_feed:[];
-  const live=!!d.connected;
+  const r=await fetch(API_URL,{
+   cache:'no-store',
+   headers:{
+    'apikey':SB_KEY,
+    'Authorization':'Bearer '+SB_KEY
+   }
+  });
+
+  if(!r.ok) throw Error('Supabase HTTP '+r.status);
+
+  const rows=await r.json();
+  if(!Array.isArray(rows)||!rows.length) throw Error('Запись live_match не найдена');
+
+  const row=rows[0];
+  const d=row.match_data||{};
+  const m=d.map||{};
+  const rd=d.round||{};
+  const players=Array.isArray(d.players)?d.players:[];
+  const kills=Array.isArray(d.kill_feed)?d.kill_feed:[];
+  const live=!!row.connected;
+
   document.getElementById('connection').textContent=live?'● LIVE DATA':'● OFFLINE';
   document.getElementById('liveCount').textContent=live?'01':'00';
   document.getElementById('currentMap').textContent=live?esc((m.name||'').split('|')[0].trim()||'CS2'):'—';
   document.getElementById('mapNote').textContent=live?`${players.length} игроков · раунд ${m.round||'—'}`:'Ожидание данных игры';
-  root.innerHTML=`<a class="match-card" href="match.html"><div class="match-meta"><span>${live?'● ТЕКУЩИЙ МАТЧ':'○ НЕТ АКТИВНОГО МАТЧА'} · ${esc(m.name||'Ожидание CS2')}</span><span class="pill ${live?'':'off'}">${live?'LIVE':'OFFLINE'}</span></div><div class="match-teams"><div class="team"><div class="team-logo">CT</div><span class="team-name">${esc(m.ct_name||'Counter-Terrorists')}</span></div><div class="score">${Number(m.ct_score)||0} : ${Number(m.t_score)||0}<small>РАУНД ${esc(m.round||'—')}</small></div><div class="team right"><span class="team-name">${esc(m.t_name||'Terrorists')}</span><div class="team-logo">T</div></div></div><div class="match-foot"><span>${live?'Смотреть статистику матча →':'Запусти CS2 и локальный сервер'}</span><strong>${live?esc(rd.phase||m.phase||'LIVE'):'FRAGLINE'}</strong></div></a>`;
-  activity.innerHTML=kills.slice(0,5).map(k=>`<div class="activity"><span><b>${esc(k.killer||'Игрок')}</b> <span style="color:var(--red)">✕</span> ${esc(k.victim||'Игрок')}</span><span>${esc(k.weapon||'')}</span></div>`).join('')||'<div class="subtle">Пока нет событий убийств.</div>';
- }catch(e){document.getElementById('connection').textContent='● API НЕДОСТУПЕН';root.innerHTML='<div class="empty">Не удалось получить данные из облака. Проверь адрес Worker и его доступность.</div>';}
+
+  root.innerHTML=`<a class="match-card" href="match.html">
+   <div class="match-meta">
+    <span>${live?'● ТЕКУЩИЙ МАТЧ':'○ НЕТ АКТИВНОГО МАТЧА'} · ${esc(m.name||'Ожидание CS2')}</span>
+    <span class="pill ${live?'':'off'}">${live?'LIVE':'OFFLINE'}</span>
+   </div>
+   <div class="match-teams">
+    <div class="team"><div class="team-logo">CT</div><span class="team-name">${esc(m.ct_name||'Counter-Terrorists')}</span></div>
+    <div class="score">${Number(m.ct_score)||0} : ${Number(m.t_score)||0}<small>РАУНД ${esc(m.round??'—')}</small></div>
+    <div class="team right"><span class="team-name">${esc(m.t_name||'Terrorists')}</span><div class="team-logo">T</div></div>
+   </div>
+   <div class="match-foot">
+    <span>${live?'Смотреть статистику матча →':'Запусти CS2 и локальный сервер'}</span>
+    <strong>${live?esc(rd.phase||m.phase||'LIVE'):'FRAGLINE'}</strong>
+   </div>
+  </a>`;
+
+  activity.innerHTML=kills.slice(0,5).map(k=>`
+   <div class="activity">
+    <span><b>${esc(k.killer||'Игрок')}</b> <span style="color:var(--red)">✕</span> ${esc(k.victim||'Игрок')}</span>
+    <span>${esc(k.weapon||'')}</span>
+   </div>
+  `).join('')||'<div class="subtle">Пока нет событий убийств.</div>';
+
+ }catch(e){
+  console.error('FRAGLINE:',e);
+  document.getElementById('connection').textContent='● API НЕДОСТУПЕН';
+  root.innerHTML='<div class="empty">Не удалось получить данные из Supabase. Проверь подключение и таблицу live_match.</div>';
+ }
 }
-refresh();setInterval(refresh,1800);
+
+refresh();
+setInterval(refresh,1800);
 </script>
 
 <script>
@@ -77,7 +131,6 @@ loadNews();setInterval(loadNews,60000);
 <script>
 // Public read-only leaderboard. The publishable key is safe for browser use;
 // table access is limited by the Supabase RLS SELECT policy.
-const SB_URL='https://wqcpbeizujufmnzonjxh.supabase.co';
 const SB_PUBLIC_KEY='sb_publishable_FrGYTKcu5HfqE-rBMHSurg_-JyrFH-K';
 async function loadTeamRankings(){
  const el=document.getElementById('teamRankings');
