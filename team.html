@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FRAGLINE — Профиль команды</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#090d14;--surface:#101824;--surface2:#151f2d;--line:#243247;--text:#edf3fb;--muted:#8b9bb1;--lime:#c7f36b;--cyan:#65c8ff;--red:#ff667b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Inter,sans-serif;padding:26px}
+.shell{max-width:1000px;margin:auto}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;border-bottom:1px solid var(--line);padding-bottom:15px}
+.brand{font-size:22px;font-weight:950;color:white;text-decoration:none}.brand span{color:var(--lime)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:24px;margin-bottom:20px}
+.team-header{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.team-logo-lg{width:70px;height:70px;border-radius:14px;background:#202e40;border:1px solid var(--line);display:grid;place-items:center;font-size:24px;font-weight:900;color:var(--lime);overflow:hidden}
+.team-logo-lg img{width:100%;height:100%;object-fit:cover}
+.team-info h1{margin:0 0 6px;font-size:28px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:20px}
+.stat-box{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
+.stat-val{font-size:22px;font-weight:900;color:var(--lime)}
+.stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;margin-top:4px}
+.roster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-top:12px}
+.player-card{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:12px;font-weight:700}
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line)}
+th{color:var(--muted)}
+.win{color:var(--lime);font-weight:bold}.loss{color:var(--red);font-weight:bold}.draw{color:var(--muted);font-weight:bold}
+.empty{color:var(--muted);text-align:center;padding:20px}
+@media(max-width:650px){body{padding:12px}.team-header{gap:12px}.team-logo-lg{width:56px;height:56px;font-size:20px}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header class="topbar">
+<a class="brand" href="index.html">FRAG<span>LINE</span></a>
+<a href="index.html#rankings" style="color:var(--muted);text-decoration:none">← Назад к рейтингу</a>
+</header>
+
+<div id="content"><div class="empty">Загрузка профиля команды...</div></div>
+</div>
+
+<script>
+const SB_URL = "https://wqcpbeizujufmnzonjxh.supabase.co";
+const SB_KEY = "sb_publishable_FrGYTKcu5HfqE-rBMHSurg_-JyrFH-K";
+const client = window.supabase.createClient(SB_URL, SB_KEY);
+
+
+async function loadTeamProfile(){
+  const params = new URLSearchParams(location.search);
+  const teamId = params.get("id");
+  const container = document.getElementById("content");
+  
+  if(!teamId){
+    container.innerHTML = '<div class="empty">Команда не указана в параметрах запроса.</div>';
+    return;
+  }
+
+
+  try {
+    const [{data: team, error: teamErr}, {data: matches, error: matchErr}] = await Promise.all([
+      client.from("teams").select("*").eq("id", teamId).single(),
+      client.from("team_matches").select("*").eq("team_id", teamId).order("match_date", {ascending: false})
+    ]);
+
+
+    if(teamErr || !team) throw new Error("Команда не найдена.");
+
+
+    const totalMatches = (team.wins || 0) + (team.losses || 0);
+    const winrate = totalMatches > 0 ? ((team.wins / totalMatches) * 100).toFixed(1) : "0.0";
+    const logoHtml = team.logo ? `<img src="${escapeHtml(team.logo)}" alt="">` : escapeHtml(team.name.slice(0,2).toUpperCase());
+    
+    let rosterHtml = '<div class="empty">Состав пока не сформирован.</div>';
+    if(Array.isArray(team.roster) && team.roster.length > 0){
+      rosterHtml = `<div class="roster-grid">` + team.roster.map(p => `<div class="player-card">🛡️ ${escapeHtml(p)}</div>`).join("") + `</div>`;
+    }
+
+
+    let matchesHtml = '<div class="empty">История матчей пока пуста.</div>';
+    if(Array.isArray(matches) && matches.length > 0){
+      matchesHtml = `<table><thead><tr><th>Дата</th><th>Соперник</th><th>Счет</th><th>Карта</th><th>Результат</th></tr></thead><tbody>` +
+        matches.map(m => `
+          <tr>
+            <td>${new Date(m.match_date).toLocaleDateString("ru-RU")}</td>
+            <td><b>${escapeHtml(m.opponent_name)}</b></td>
+            <td>${m.team_score} : ${m.opponent_score}</td>
+            <td>${escapeHtml(m.map_name || '—')}</td>
+            <td class="${m.result}">${m.result === 'win' ? 'ПОБЕДА' : m.result === 'loss' ? 'ПОРАЖЕНИЕ' : 'НИЧЬЯ'}</td>
+          </tr>
+        `).join("") + `</tbody></table>`;
+    }
+
+
+    container.innerHTML = `
+      <div class="panel">
+        <div class="team-header">
+          <div class="team-logo-lg">${logoHtml}</div>
+          <div class="team-info">
+            <h1>${escapeHtml(team.name)}</h1>
+            <div style="color:var(--muted)">Официальный профиль команды в системе FRAGLINE</div>
+          </div>
+        </div>
+        ${team.description ? `<p style="margin-top:16px;color:#c1ccda">${escapeHtml(team.description)}</p>` : ''}
+        <div class="stats-grid">
+          <div class="stat-box"><div class="stat-val">${team.rating}</div><div class="stat-lbl">Рейтинг ELO</div></div>
+          <div class="stat-box"><div class="stat-val">${team.wins || 0}</div><div class="stat-lbl">Победы</div></div>
+          <div class="stat-box"><div class="stat-val">${team.losses || 0}</div><div class="stat-lbl">Поражения</div></div>
+          <div class="stat-box"><div class="stat-val">${winrate}%</div><div class="stat-lbl">Побед</div></div>
+        </div>
+      </div>
+
+
+      <div class="panel">
+        <h2 style="margin-top:0">Состав команды</h2>
+        ${rosterHtml}
+      </div>
+
+
+      <div class="panel">
+        <h2 style="margin-top:0">История матчей</h2>
+        <div style="overflow-x:auto">${matchesHtml}</div>
+      </div>
+    `;
+  } catch(e) {
+    container.innerHTML = `<div class="empty">Ошибка загрузки: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+
+function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+
+loadTeamProfile();
+</script>
+
+</body>
+</html>
