@@ -5,6 +5,120 @@
 <section class="stats"><div class="stat"><label>PLAYERS</label><b id="total">0</b></div><div class="stat"><label>BOMB</label><b id="bomb">—</b></div><div class="stat"><label>ROUND PHASE</label><b id="phaseStat">—</b></div><div class="stat"><label>YOUR TEAM</label><b id="local">—</b></div></section>
 <main class="grid"><section class="panel ct"><div class="panel-head"><span>COUNTER-TERRORISTS</span><span class="count" id="ctCount">0 PLAYERS</span></div><div class="table-wrap"><table><thead><tr><th>PLAYER</th><th>K</th><th>D</th><th>A</th><th>HP</th><th>WEAPON</th></tr></thead><tbody id="ctPlayers"><tr><td colspan="6" class="empty">Ожидание игроков…</td></tr></tbody></table></div></section><section class="panel feed"><div class="panel-head"><span>KILL FEED</span><span class="count">LIVE EVENTS</span></div><div class="feed-list" id="kills"><div class="empty">Ожидание событий…</div></div></section><section class="panel tt"><div class="panel-head"><span>TERRORISTS</span><span class="count" id="tCount">0 PLAYERS</span></div><div class="table-wrap"><table><thead><tr><th>PLAYER</th><th>K</th><th>D</th><th>A</th><th>HP</th><th>WEAPON</th></tr></thead><tbody id="tPlayers"><tr><td colspan="6" class="empty">Ожидание игроков…</td></tr></tbody></table></div></section></main><footer class="foot">FRAGLINE · LIVE MATCH CENTER · DATA PROVIDED BY CS2 GAME STATE INTEGRATION</footer></div>
 <script>
-const API_URL='https://fragline-api.kozulinartem018.workers.dev/stats';const $=id=>document.getElementById(id);function esc(v){return String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function renderTeam(id,arr){$(id).innerHTML=arr.length?arr.map(p=>`<tr><td class="pname">${esc(p.name)}</td><td>${p.kills??0}</td><td>${p.deaths??0}</td><td>${p.assists??0}</td><td class="${Number(p.health)>0?'hp':'dead'}">${p.health??'—'}</td><td class="weapon">${esc(p.weapon||'—')}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">Ожидание игроков…</td></tr>'}function timer(s){s=Number(s);if(!Number.isFinite(s)||s<0)return'--:--';return`${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`}
-async function refresh(){try{const r=await fetch(API_URL,{cache:'no-store'});if(!r.ok)throw Error('api');const d=await r.json(),m=d.map||{},rd=d.round||{},players=Array.isArray(d.players)?d.players:[],kills=Array.isArray(d.kill_feed)?d.kill_feed:[];const live=!!d.connected;$('status').textContent=live?'● LIVE DATA':'● OFFLINE';$('live').textContent=live?'LIVE':'OFFLINE';$('map').textContent=m.name||'COUNTER-STRIKE 2';$('ctName').textContent=m.ct_name||'CT';$('tName').textContent=m.t_name||'T';$('ctScore').textContent=m.ct_score??0;$('tScore').textContent=m.t_score??0;$('timer').textContent=timer(rd.time_remaining);$('round').textContent=`ROUND ${m.round??'—'}`;$('phase').textContent=live?`${rd.phase||m.phase||'LIVE'} · ${m.mode||'CS2'}`:'Нет активной трансляции';$('phaseStat').textContent=rd.phase||m.phase||'—';$('bomb').textContent=rd.bomb||'—';$('local').textContent=(d.local_player||{}).team||'—';$('total').textContent=players.length;const ct=players.filter(p=>p.team==='CT'),t=players.filter(p=>p.team==='T');$('ctCount').textContent=`${ct.length} PLAYERS`;$('tCount').textContent=`${t.length} PLAYERS`;renderTeam('ctPlayers',ct);renderTeam('tPlayers',t);$('kills').innerHTML=kills.slice(0,12).map(k=>`<div class="kill"><span class="killer">${esc(k.killer)}</span><span class="x">✕</span><span class="victim">${esc(k.victim)}</span><span class="weapon-k">${esc(k.weapon)}</span></div>`).join('')||'<div class="empty">Пока нет убийств.</div>';}catch(e){$('status').textContent='● API ERROR';$('phase').textContent='Не удалось подключиться к облачному API';}}refresh();setInterval(refresh,1200);
+const SUPABASE_URL = 'https://wqcpbeizujufmnzonjxh.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_FrGYTKcu5HfqE-rBMHSurg_-JyrFH-K';
+
+const API_URL = `${SUPABASE_URL}/rest/v1/live_match?id=eq.1&select=match_data,connected,updated`;
+
+const $ = id => document.getElementById(id);
+
+function esc(v) {
+    return String(v ?? '—').replace(/[&<>"']/g, c => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[c]));
+}
+
+function renderTeam(id, arr) {
+    $(id).innerHTML = arr.length
+        ? arr.map(p => `
+            <tr>
+                <td class="pname">${esc(p.name)}</td>
+                <td>${p.kills ?? 0}</td>
+                <td>${p.deaths ?? 0}</td>
+                <td>${p.assists ?? 0}</td>
+                <td class="${Number(p.health) > 0 ? 'hp' : 'dead'}">${p.health ?? '—'}</td>
+                <td class="weapon">${esc(p.weapon || '—')}</td>
+            </tr>
+        `).join('')
+        : '<tr><td colspan="6" class="empty">Ожидание игроков…</td></tr>';
+}
+
+function timer(s) {
+    s = Number(s);
+    if (!Number.isFinite(s) || s < 0) return '--:--';
+    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+}
+
+async function refresh() {
+    try {
+        const r = await fetch(API_URL, {
+            cache: 'no-store',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`
+            }
+        });
+
+        if (!r.ok) {
+            throw Error(`Supabase HTTP ${r.status}`);
+        }
+
+        const rows = await r.json();
+
+        if (!Array.isArray(rows) || !rows.length) {
+            throw Error('Запись матча не найдена');
+        }
+
+        const row = rows[0];
+        const d = row.match_data || {};
+        const m = d.map || {};
+        const rd = d.round || {};
+        const players = Array.isArray(d.players) ? d.players : [];
+        const kills = Array.isArray(d.kill_feed) ? d.kill_feed : [];
+        const live = !!row.connected;
+
+        $('status').textContent = live ? '● LIVE DATA' : '● OFFLINE';
+        $('live').textContent = live ? 'LIVE' : 'OFFLINE';
+
+        $('map').textContent = m.name || 'COUNTER-STRIKE 2';
+        $('ctName').textContent = m.ct_name || 'CT';
+        $('tName').textContent = m.t_name || 'T';
+
+        $('ctScore').textContent = m.ct_score ?? 0;
+        $('tScore').textContent = m.t_score ?? 0;
+
+        $('timer').textContent = timer(rd.time_remaining);
+        $('round').textContent = `ROUND ${m.round ?? '—'}`;
+
+        $('phase').textContent = live
+            ? `${rd.phase || m.phase || 'LIVE'} · ${m.mode || 'CS2'}`
+            : 'Нет активной трансляции';
+
+        $('phaseStat').textContent = rd.phase || m.phase || '—';
+        $('bomb').textContent = rd.bomb || '—';
+        $('local').textContent = (d.local_player || {}).team || '—';
+
+        $('total').textContent = players.length;
+
+        const ct = players.filter(p => p.team === 'CT');
+        const t = players.filter(p => p.team === 'T');
+
+        $('ctCount').textContent = `${ct.length} PLAYERS`;
+        $('tCount').textContent = `${t.length} PLAYERS`;
+
+        renderTeam('ctPlayers', ct);
+        renderTeam('tPlayers', t);
+
+        $('kills').innerHTML = kills.slice(0, 12).map(k => `
+            <div class="kill">
+                <span class="killer">${esc(k.killer)}</span>
+                <span class="x">✕</span>
+                <span class="victim">${esc(k.victim)}</span>
+                <span class="weapon-k">${esc(k.weapon)}</span>
+            </div>
+        `).join('') || '<div class="empty">Пока нет убийств.</div>';
+
+    } catch (e) {
+        console.error('FRAGLINE:', e);
+        $('status').textContent = '● API ERROR';
+        $('phase').textContent = e.message || 'Ошибка подключения к Supabase';
+    }
+}
+
+refresh();
+setInterval(refresh, 1200);
 </script></body></html>
