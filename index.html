@@ -15,7 +15,7 @@
 <header class="topbar"><a class="brand" href="index.html">FRAG<span>LINE</span></a><nav class="nav"><a class="active" href="index.html">Главная</a><a href="#matches">Матчи</a><a href="#news">Новости</a><a href="#rankings">Рейтинг</a><a href="match.html">Live-центр</a></nav><div class="topright"><span class="live-dot">● LIVE HUB</span><span>CS2 ESPORTS</span></div></header>
 <section class="hero"><div class="hero-main"><div class="eyebrow">Counter-Strike 2 · Community hub</div><h1>В центре<br>каждого раунда.</h1><p>Матчи, результаты и игровая статистика CS2 — в одном месте. Следи за игрой в реальном времени.</p><div class="hero-actions"><a class="btn" href="#matches">Смотреть матчи ↗</a><a class="btn ghost" href="match.html">Открыть live-центр</a></div></div><div class="hero-side"><div class="mini-card"><div class="mini-label">LIVE MATCHES</div><div class="mini-value" id="liveCount">—</div><div class="mini-note">Матчей сейчас в эфире</div></div><div class="mini-card"><div class="mini-label">CURRENT MAP</div><div class="mini-value" id="currentMap">—</div><div class="mini-note" id="mapNote">Ожидание данных игры</div></div></div></section>
 <div class="layout">
-<aside class="side-section leftbar"><div class="section-head"><h2 id="rankings">Рейтинг команд</h2><span class="subtle">SEASON</span></div><div class="box"><div class="box-head">TOP TEAMS <span class="subtle">COMMUNITY</span></div><div class="box-body"><div class="rank-row"><span class="rank-no">01</span><span class="rank-mark">#1</span><span class="rank-name">Рейтинг появится</span></div><div class="rank-row"><span class="rank-no">02</span><span class="rank-mark">#2</span><span class="rank-name">после подключения</span></div><div class="rank-row"><span class="rank-no">03</span><span class="rank-mark">#3</span><span class="rank-name">источника рейтинга</span></div></div></div><div class="box"><div class="box-head">FRAGLINE <span class="subtle">ABOUT</span></div><div class="box-body subtle">Независимый центр матчей Counter-Strike 2. Сейчас подключена личная трансляция GSI.</div></div></aside>
+<aside class="side-section leftbar"><div class="section-head"><h2 id="rankings">Рейтинг команд</h2><span class="subtle">SEASON</span></div><div class="box"><div class="box-head">TOP TEAMS <span class="subtle">FRAGLINE RATING</span></div><div class="box-body" id="teamRankings"><div class="subtle">Загружаем рейтинг команд...</div></div></div><div class="box"><div class="box-head">FRAGLINE <span class="subtle">ABOUT</span></div><div class="box-body subtle">Независимый центр матчей Counter-Strike 2. Сейчас подключена личная трансляция GSI.</div></div></aside>
 <main class="content-section">
 <div class="section-head" id="matches"><h2>Матчи</h2><span class="live-dot" id="connection">● ПОДКЛЮЧЕНИЕ</span></div><div id="matchRoot"><div class="empty">Загружаем live-данные…</div></div>
 <div class="section-head" style="margin-top:23px" id="news"><h2>Последние новости</h2><span class="subtle">FRAGLINE NEWS</span></div><div class="box"><div id="newsRoot"><div class="empty">Загружаем новости...</div></div></div>
@@ -72,6 +72,35 @@ async function loadNews(){
  catch(e){el.innerHTML='<div class="empty">Не удалось загрузить новости. Проверь news.json в корне репозитория.</div>';console.error('FRAGLINE NEWS:',e);}
 }
 loadNews();setInterval(loadNews,60000);
+</script>
+
+<script>
+// Public read-only leaderboard. The publishable key is safe for browser use;
+// table access is limited by the Supabase RLS SELECT policy.
+const SB_URL='https://wqcpbeizujufmnzonjxh.supabase.co';
+const SB_PUBLIC_KEY='sb_publishable_FrGYTKcu5HfqE-rBMHSurg_-JyrFH-K';
+async function loadTeamRankings(){
+ const el=document.getElementById('teamRankings');
+ try{
+  const response=await fetch(SB_URL+'/rest/v1/teams?select=name,rating,wins,losses,draws&order=rating.desc,name.asc&limit=10',{
+   headers:{'apikey':SB_PUBLIC_KEY,'Authorization':'Bearer '+SB_PUBLIC_KEY},cache:'no-store'
+  });
+  if(!response.ok) throw new Error('HTTP '+response.status);
+  const teams=await response.json();
+  if(!Array.isArray(teams)||!teams.length){el.innerHTML='<div class="subtle">Команды пока не добавлены.</div>';return;}
+  el.innerHTML=teams.map((team,index)=>{
+   const rank=String(index+1).padStart(2,'0');
+   const rating=Number(team.rating)||0;
+   const record=`${Number(team.wins)||0}W · ${Number(team.losses)||0}L${Number(team.draws)?' · '+Number(team.draws)+'D':''}`;
+   return `<div class="rank-row"><span class="rank-no">${rank}</span><span class="rank-mark">#${index+1}</span><div style="min-width:0"><div class="rank-name">${newsEscape(team.name)}</div><div class="subtle">${record}</div></div><span class="rank-meta"><b style="color:var(--lime);font-size:12px">${rating}</b> ELO</span></div>`;
+  }).join('');
+ }catch(error){
+  console.error('FRAGLINE RATING:',error);
+  el.innerHTML='<div class="subtle">Не удалось загрузить рейтинг. Проверь доступ на чтение таблицы teams в Supabase.</div>';
+ }
+}
+loadTeamRankings();
+setInterval(loadTeamRankings,60000);
 </script>
 </body>
 </html>
