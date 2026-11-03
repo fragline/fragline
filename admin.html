@@ -55,6 +55,7 @@ small{color:#9eacc0}
 <button class="tab active" data-tab="news">Новости</button>
 <button class="tab" data-tab="rating">Рейтинг команд</button>
 <button class="tab" data-tab="profiles">Профили и матчи</button>
+<button class="tab" data-tab="tournaments">Турниры</button>
 </div>
 
 <section id="newsTab">
@@ -121,6 +122,20 @@ small{color:#9eacc0}
 <button id="addMatchBtn" style="margin-top:12px">Добавить матч в историю</button>
 </div>
 </section>
+<section id="tournamentsTab" class="hidden">
+<div class="panel"><h2 id="tournamentFormTitle">Создать турнир</h2><input id="tournamentId" type="hidden">
+<label>Название турнира</label><input id="tournamentName" maxlength="120" placeholder="FRAGLINE CUP 2026">
+<label>Логотип турнира (изображение, до 5 МБ)</label><input id="tournamentLogo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+<label>Ссылка на регистрацию (Google Forms или другая)</label><input id="tournamentRegistration" type="url" placeholder="https://forms.gle/...">
+<label>Призовой фонд</label><input id="tournamentPrize" maxlength="100" placeholder="Например, 500 €">
+<label>Описание (необязательно)</label><textarea id="tournamentDescription" placeholder="Формат, даты, правила..."></textarea>
+<label><input id="tournamentPublished" type="checkbox" checked style="width:auto;margin:0 8px 0 0">Опубликовать турнир на сайте</label><br><button id="saveTournamentBtn">Сохранить турнир</button> <button id="resetTournamentBtn" class="secondary" type="button">Очистить форму</button>
+</div>
+<div class="panel"><h2>Сетка турнира</h2><label>Выбери турнир</label><select id="bracketTournament"><option value="">Сначала создай турнир</option></select>
+<div class="grid"><div><label>Раунд</label><input id="bracketRound" placeholder="Четвертьфинал"></div><div><label>Команда 1</label><input id="bracketTeam1" placeholder="Team A"></div><div><label>Команда 2</label><input id="bracketTeam2" placeholder="Team B"></div><div><label>Счёт команды 1</label><input id="bracketScore1" type="number" min="0" placeholder="13"></div><div><label>Счёт команды 2</label><input id="bracketScore2" type="number" min="0" placeholder="8"></div><div><label>Победитель</label><select id="bracketWinner"><option value="">Не определён</option></select></div></div>
+<button id="addBracketMatchBtn">Добавить матч в сетку</button><div id="bracketAdminList"></div>
+</div><div class="panel"><h2>Созданные турниры</h2><div id="tournamentAdminList" class="muted">Загрузка...</div></div>
+</section>
 </section>
 <div id="status"></div>
 </main>
@@ -162,7 +177,7 @@ async function refreshSession(){
   const signedIn=!!data.session;
   $("login").classList.toggle("hidden",signedIn);
   $("app").classList.toggle("hidden",!signedIn);
-  if(signedIn) await loadRating();
+  if(signedIn){await loadRating();await loadTournamentsAdmin();}
 }
 
 
@@ -171,6 +186,8 @@ document.querySelectorAll(".tab").forEach(btn=>btn.addEventListener("click",()=>
   $("newsTab").classList.toggle("hidden",btn.dataset.tab!=="news");
   $("ratingTab").classList.toggle("hidden",btn.dataset.tab!=="rating");
   $("profilesTab").classList.toggle("hidden",btn.dataset.tab!=="profiles");
+  $("tournamentsTab").classList.toggle("hidden",btn.dataset.tab!=="tournaments");
+  if(btn.dataset.tab==="tournaments") loadTournamentsAdmin();
 }));
 
 
@@ -359,6 +376,26 @@ $("adjustBtn").addEventListener("click",async()=>{
 
 $("reloadRatingBtn").addEventListener("click",async()=>{await loadRating();status("Данные рейтинга обновлены.");});
 
+
+const TOURNAMENT_BUCKET="tournament-logos";
+let tournamentCache=[];
+async function loadTournamentsAdmin(){
+ try{const {data,error}=await client.from("tournaments").select("*").order("created_at",{ascending:false});if(error)throw error;tournamentCache=data||[];
+ $("tournamentAdminList").innerHTML=tournamentCache.length?tournamentCache.map(t=>`<div style="padding:12px 0;border-bottom:1px solid #283548;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><div><b>${escapeHtml(t.name)}</b><small> · ${t.is_published?"Опубликован":"Скрыт"}</small><br><small>${escapeHtml(t.prize_pool||"")}</small></div><div><button class="secondary" onclick="editTournament('${t.id}')">Изменить</button> <button class="danger" onclick="deleteTournament('${t.id}')">Удалить</button></div></div>`).join(""):'Турниров пока нет.';
+ $("bracketTournament").innerHTML='<option value="">Выбери турнир</option>'+tournamentCache.map(t=>`<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("");
+ }catch(e){$("tournamentAdminList").textContent="Ошибка загрузки: "+e.message;}
+}
+window.editTournament=id=>{const t=tournamentCache.find(x=>x.id===id);if(!t)return;$("tournamentId").value=t.id;$("tournamentName").value=t.name||"";$("tournamentRegistration").value=t.registration_url||"";$("tournamentPrize").value=t.prize_pool||"";$("tournamentDescription").value=t.description||"";$("tournamentPublished").checked=!!t.is_published;$("tournamentFormTitle").textContent="Редактировать турнир";$("bracketTournament").value=id;renderAdminBracket(t.bracket||[]);};
+window.deleteTournament=async id=>{if(!confirm("Удалить турнир и его сетку?"))return;try{const {error}=await client.from("tournaments").delete().eq("id",id);if(error)throw error;await loadTournamentsAdmin();status("Турнир удалён.");}catch(e){status("Ошибка удаления: "+e.message);}};
+function resetTournamentForm(){$("tournamentId").value="";["tournamentName","tournamentRegistration","tournamentPrize","tournamentDescription"].forEach(id=>$(id).value="");$("tournamentLogo").value="";$("tournamentPublished").checked=true;$("tournamentFormTitle").textContent="Создать турнир";}
+$("resetTournamentBtn").addEventListener("click",resetTournamentForm);
+$("saveTournamentBtn").addEventListener("click",async()=>{try{const name=$("tournamentName").value.trim(),registration_url=$("tournamentRegistration").value.trim(),prize_pool=$("tournamentPrize").value.trim(),description=$("tournamentDescription").value.trim(),is_published=$("tournamentPublished").checked,id=$("tournamentId").value; if(!name)throw Error("Укажи название турнира.");if(registration_url&&!/^https?:\/\//i.test(registration_url))throw Error("Ссылка должна начинаться с http:// или https://");$("saveTournamentBtn").disabled=true;status("Сохраняем турнир...");let logo_url=tournamentCache.find(t=>t.id===id)?.logo_url||null;const file=$("tournamentLogo").files[0];if(file){if(file.size>5*1024*1024)throw Error("Логотип должен быть меньше 5 МБ.");const ext=(file.name.split(".").pop()||"png").toLowerCase();const path=`${crypto.randomUUID()}.${ext}`;const up=await client.storage.from(TOURNAMENT_BUCKET).upload(path,file,{upsert:true,contentType:file.type});if(up.error)throw up.error;logo_url=client.storage.from(TOURNAMENT_BUCKET).getPublicUrl(path).data.publicUrl;}const payload={name,registration_url:registration_url||null,prize_pool:prize_pool||null,description:description||null,logo_url,is_published};let q=id?client.from("tournaments").update(payload).eq("id",id):client.from("tournaments").insert(payload);const {error}=await q;if(error)throw error;resetTournamentForm();await loadTournamentsAdmin();status("Турнир сохранён.");}catch(e){status("Ошибка сохранения турнира: "+e.message);}finally{$("saveTournamentBtn").disabled=false;}});
+function renderAdminBracket(matches){$("bracketAdminList").innerHTML=matches.length?matches.map((m,i)=>`<div style="padding:8px;border-bottom:1px solid #283548">${escapeHtml(m.round)}: ${escapeHtml(m.team1)} ${m.score1??"—"}:${m.score2??"—"} ${escapeHtml(m.team2)} · Победитель: ${escapeHtml(m.winner||"не определён")} <button class="danger" onclick="removeBracketMatch(${i})">Убрать</button></div>`).join(""):'<small>Матчи ещё не добавлены.</small>';}
+window.removeBracketMatch=async i=>{const id=$("bracketTournament").value,t=tournamentCache.find(x=>x.id===id);if(!t)return;const matches=[...(t.bracket||[])];matches.splice(i,1);await saveBracket(id,matches);};
+async function saveBracket(id,matches){const {error}=await client.from("tournaments").update({bracket:matches}).eq("id",id);if(error)throw error;const t=tournamentCache.find(x=>x.id===id);if(t)t.bracket=matches;renderAdminBracket(matches);status("Сетка обновлена.");}
+$("bracketTournament").addEventListener("change",()=>{const t=tournamentCache.find(x=>x.id===$("bracketTournament").value);renderAdminBracket(t?.bracket||[]);});
+$("addBracketMatchBtn").addEventListener("click",async()=>{try{const id=$("bracketTournament").value,t=tournamentCache.find(x=>x.id===id);if(!t)throw Error("Сначала выбери турнир.");const round=$("bracketRound").value.trim(),team1=$("bracketTeam1").value.trim(),team2=$("bracketTeam2").value.trim(),s1=$("bracketScore1").value,s2=$("bracketScore2").value,winner=$("bracketWinner").value;if(!round||!team1||!team2)throw Error("Заполни раунд и обе команды.");if(winner&&winner!==team1&&winner!==team2)throw Error("Победитель должен совпадать с одной из команд.");const matches=[...(t.bracket||[]),{round,team1,team2,score1:s1===""?null:Number(s1),score2:s2===""?null:Number(s2),winner:winner||null}];await saveBracket(id,matches);["bracketRound","bracketTeam1","bracketTeam2","bracketScore1","bracketScore2"].forEach(x=>$(x).value="");$("bracketWinner").innerHTML='<option value="">Не определён</option>'; }catch(e){status("Ошибка изменения сетки: "+e.message);}});
+["bracketTeam1","bracketTeam2"].forEach(id=>$(id).addEventListener("input",()=>{$("bracketWinner").innerHTML='<option value="">Не определён</option>'+[...new Set([$("bracketTeam1").value.trim(),$("bracketTeam2").value.trim()].filter(Boolean))].map(v=>`<option>${escapeHtml(v)}</option>`).join("");}));
 
 init();
 async function init(){
